@@ -1,0 +1,158 @@
+name: Watch BatUtil W10MUI
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      EXTERNAL_OWNER: abbodi1406
+      EXTERNAL_REPO: BatUtil
+      EXTERNAL_BRANCH: master
+      WATCH_PREFIX: W10MUI/
+      STATE_VAR: BATUTIL_W10MUI_LAST_SHA
+
+    steps:
+      - name: Get current upstream SHA
+        id: current
+        run: |
+          set -euo pipefail
+          sha=$(curl -fsSL "https://api.github.com/repos/${EXTERNAL_OWNER}/${EXTERNAL_REPO}/commits/${EXTERNAL_BRANCH}" | jq -r '.sha')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Read stored SHA
+        id: stored
+        env:
+          LAST_SHA: ${{ vars.BATUTIL_W10MUI_LAST_SHA }}
+        run: |
+          echo "sha=${LAST_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Initialize state variable on first run
+        if: steps.stored.outputs.sha == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NEW_SHA: ${{ steps.current.outputs.sha }}
+          STATE_VAR: BATUTIL_W10MUI_LAST_SHA
+        run: |
+          set -euo pipefail
+          if ! gh api --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/actions/variables/${STATE_VAR}" \
+            -f name="${STATE_VAR}" \
+            -f value="${NEW_SHA}" >/dev/null 2>&1; then
+            gh api --method POST \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${REPO}/actions/variables" \
+              -f name="${STATE_VAR}" \
+              -f value="${NEW_SHA}" >/dev/null
+          fi
+          {
+            echo "### Watch BatUtil W10MUI"
+            echo "Estado inicializado con SHA: ${NEW_SHA}"
+            echo "No se compara en la primera ejecución."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare commits and collect W10MUI changes
+        if: steps.stored.outputs.sha != ''
+        id: compare
+        env:
+          OLD_SHA: ${{ steps.stored.outputs.sha }}
+          NEW_SHA: ${{ steps.current.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          compare_url="https://api.github.com/repos/${EXTERNAL_OWNER}/${EXTERNAL_REPO}/compare/${OLD_SHA}...${NEW_SHA}"
+          curl -fsSL "$compare_url" > compare.json
+
+          jq -r '.files[].filename' compare.json > files_all.txt
+          grep -E "^${WATCH_PREFIX}" files_all.txt > files_w10mui.txt || true
+
+          changed_count=$(wc -l < files_w10mui.txt | tr -d ' ')
+          if [ "${changed_count}" -gt 0 ]; then
+            changed=true
+          else
+            changed=false
+          fi
+
+          top_dirs=$(awk -F/ '{print $1}' files_w10mui.txt | sort -u | paste -sd ',' - || true)
+          sub_dirs=$(awk -F/ 'NF>=2{print $1"/"$2}' files_w10mui.txt | sort -u | paste -sd ',' - || true)
+
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+          echo "changed_count=${changed_count}" >> "$GITHUB_OUTPUT"
+          echo "top_dirs=${top_dirs}" >> "$GITHUB_OUTPUT"
+          echo "sub_dirs=${sub_dirs}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "files<<EOF"
+            cat files_w10mui.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Watch BatUtil W10MUI"
+            echo "Comparando: ${OLD_SHA} -> ${NEW_SHA}"
+            echo "Cambios dentro de ${WATCH_PREFIX}: ${changed_count}"
+            if [ "${changed_count}" -gt 0 ]; then
+              echo ""
+              echo "Carpetas detectadas:"
+              echo "- Top: ${top_dirs}"
+              echo "- Sub: ${sub_dirs}"
+              echo ""
+              echo "Archivos:"
+              sed 's/^/- /' files_w10mui.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout repository
+        if: steps.stored.outputs.sha == '' || steps.compare.outputs.changed == 'true'
+        uses: actions/checkout@v4
+
+      - name: Replace local W10MUI from upstream
+        if: steps.stored.outputs.sha == '' || steps.compare.outputs.changed == 'true'
+        env:
+          NEW_SHA: ${{ steps.current.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          tmp_dir=$(mktemp -d)
+          git clone --depth 1 --filter=blob:none --sparse "https://github.com/${EXTERNAL_OWNER}/${EXTERNAL_REPO}.git" "$tmp_dir/src"
+          git -C "$tmp_dir/src" sparse-checkout set W10MUI
+
+          rm -rf W10MUI
+          mkdir -p W10MUI
+          cp -a "$tmp_dir/src/W10MUI/." W10MUI/
+          rm -rf "$tmp_dir"
+
+          if git status --porcelain -- W10MUI | grep . >/dev/null; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A W10MUI
+            git commit -m "chore: sync W10MUI from ${EXTERNAL_OWNER}/${EXTERNAL_REPO}@${NEW_SHA}"
+            git push
+            echo "W10MUI actualizado y publicado." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No hubo diferencias de contenido en W10MUI." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Update stored SHA
+        if: steps.stored.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NEW_SHA: ${{ steps.current.outputs.sha }}
+          STATE_VAR: BATUTIL_W10MUI_LAST_SHA
+        run: |
+          set -euo pipefail
+          gh api --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/actions/variables/${STATE_VAR}" \
+            -f name="${STATE_VAR}" \
+            -f value="${NEW_SHA}" >/dev/null
