@@ -22,23 +22,39 @@ function GetID {
 
     $version = (Get-Content $IniPath | Where-Object { $_ -match '^Version=' } | Select-Object -First 1) -replace '^Version=', ''
     $arch = (Get-Content $IniPath | Where-Object { $_ -match '^Arch=' } | Select-Object -First 1) -replace '^Arch=', ''
+    $rev = (Get-Content $IniPath | Where-Object { $_ -match '^Rev=' } | Select-Object -First 1) -replace '^Rev=', ''
 
     if (-not $version -or -not $arch) {
         Write-Error "data.ini debe contener Version y Arch."
         exit 1
     }
 
-    $query = [uri]::EscapeDataString("$version $arch")
+    if (-not $rev) {
+        $rev = "latest"
+    }
+
+    $isLatest = $rev -ieq "latest"
+    if (-not $isLatest -and $rev -notmatch '^\d+$') {
+        Write-Error "Rev debe ser 'latest' o un numero."
+        exit 1
+    }
+
+    $searchTerms = if ($isLatest) { "$version $arch" } else { "$version $rev $arch" }
+    $query = [uri]::EscapeDataString($searchTerms)
     $url = "https://api.uupdump.net/listid.php?search=$query"
     $resp = Invoke-RestMethod -Uri $url
 
     $items = $resp.response.builds.PSObject.Properties | ForEach-Object { $_.Value }
     $match = $items |
-        Where-Object { $_.arch -eq $arch -and $_.title -match [regex]::Escape($version) } |
+        Where-Object {
+            $_.arch -eq $arch -and
+            $_.title -match [regex]::Escape($version) -and
+            ($isLatest -or $_.title -match [regex]::Escape($rev))
+        } |
         Select-Object -First 1
 
     if (-not $match) {
-        Write-Error "No se encontro UpdateID para Version=$version y Arch=$arch."
+        Write-Error "No se encontro UpdateID para Version=$version, Rev=$rev y Arch=$arch."
         exit 1
     }
 
