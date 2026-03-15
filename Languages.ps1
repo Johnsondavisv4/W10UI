@@ -10,7 +10,7 @@ if (Test-Path (Join-Path $BaseDir "W10MUI")) {
     $WorkDir = $BaseDir
 }
 $DirLangs = Join-Path $WorkDir "Langs"
-$DirFODs = Join-Path $WorkDir "OnDemand"
+$DirFODs = Join-Path (Join-Path $WorkDir "OnDemand") "x64"
 $Objetivos = @(
     "Microsoft-Windows-Client-LanguagePack-Package-amd64-es-MX.esd",
     "Microsoft-Windows-LanguageFeatures-Basic-es-mx-Package-amd64.cab",
