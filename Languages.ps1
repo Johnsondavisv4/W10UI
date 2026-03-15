@@ -91,26 +91,19 @@ function Get-Aria {
 
 function Main {
     param (
-        [string]$Api,
         [string]$AriaExe,
         [string]$LangsDir,
         [string]$FodsDir,
-        [string[]]$Targets,
-        [string]$FodFilter,
-        [string]$IniPath,
-        [string]$Language
+        [string]$IniPath
     )
 
-    # 1. Obtener el ID
     $id = GetID -IniPath $IniPath
     $ApiUrl = "https://api.uupdump.net/get.php?id=$id"
 
-    # 2. Descargar aria2c si no existe
     if (-not (Test-Path $AriaExe)) {
         Get-Aria -TargetPath $AriaExe
     }
 
-    # 3. Consultar el único endpoint
     Write-Host "Conectando a la API de UUP Dump..." -ForegroundColor Cyan
     $json = (Invoke-WebRequest -Uri $ApiUrl).Content | ConvertFrom-Json -AsHashtable
 
@@ -121,39 +114,38 @@ function Main {
 
     $archivos = $json.response.files
 
-    # 4. Preparar carpetas
     if (!(Test-Path $LangsDir)) { New-Item -ItemType Directory -Path $LangsDir | Out-Null }
     if (!(Test-Path $FodsDir)) { New-Item -ItemType Directory -Path $FodsDir | Out-Null }
 
     $downloads = @()
     Write-Host "Buscando archivos objetivos en la respuesta..." -ForegroundColor Cyan
 
-    # 5. Filtrar directamente sobre el JSON
+    # Definimos las reglas de búsqueda claras
+    $RegexPack = "(?=.*LanguagePack)(?=.*es-[mM][xX]).*"
+    $RegexFOD  = "(?=.*LanguageFeatures)(?=.*es-[mM][xX]).*"
+
     foreach ($nombreArchivo in $archivos.Keys) {
         $archivoData = $archivos[$nombreArchivo]
         $url = $archivoData.url
 
-        # Si el archivo no tiene URL de descarga, lo saltamos
         if (-not $url) {
             continue
         }
 
-        # Evaluamos usando los filtros originales (-contains y -like)
-        $isLanguagePack = $Targets -contains $nombreArchivo
-        $isFodMatch = $nombreArchivo -like "*$FodFilter*"
-
-        if ($isLanguagePack -or $isFodMatch) {
-            $destino = if ($isLanguagePack) {
-                Join-Path $LangsDir $nombreArchivo
-            } else {
-                Join-Path $FodsDir $nombreArchivo
-            }
-
+        # Evaluamos y separamos según la expresión regular
+        if ($nombreArchivo -match $RegexPack) {
+            
+            $destino = Join-Path $LangsDir $nombreArchivo
             $downloads += [PSCustomObject]@{ Nombre = $nombreArchivo; Url = $url; Destino = $destino }
+            
+        } elseif ($nombreArchivo -match $RegexFOD) {
+            
+            $destino = Join-Path $FodsDir $nombreArchivo
+            $downloads += [PSCustomObject]@{ Nombre = $nombreArchivo; Url = $url; Destino = $destino }
+            
         }
     }
 
-    # 6. Descargar si hay coincidencias
     if ($downloads.Count -eq 0) {
         Write-Error "No se encontraron descargas en la respuesta."
         exit 1
@@ -169,10 +161,10 @@ function Main {
 
     Write-Host "¡Clasificación y descarga completadas! Archivos listos en \Langs y \OnDemand" -ForegroundColor Cyan
 
-    # Limpieza final
     if (Test-Path $BinDir) {
         Remove-Item -Path $BinDir -Recurse -Force
     }
 }
 
-Main -Api "" -AriaExe $AriaPath -LangsDir $DirLangs -FodsDir $DirFODs -Targets $Objetivos -FodFilter $FodMatch -IniPath $ConfigPath -Language $Lang
+# La llamada a la función ahora es mucho más limpia
+Main -AriaExe $AriaPath -LangsDir $DirLangs -FodsDir $DirFODs -IniPath $ConfigPath
