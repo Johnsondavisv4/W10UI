@@ -1,3 +1,9 @@
+if ($PSVersionTable.PSVersion.Major -le 5) {
+    Write-Host "Detectado PowerShell antiguo. Reiniciando en PowerShell 7..." -ForegroundColor Yellow
+    Start-Process pwsh -ArgumentList "-File `"$PSCommandPath`""
+    exit
+}
+
 $BaseDir = $PSScriptRoot
 $ConfigPath = Join-Path $BaseDir "data.ini"
 $WorkDir = $null
