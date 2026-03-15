@@ -15,7 +15,8 @@ jobs:
       EXTERNAL_OWNER: abbodi1406
       EXTERNAL_REPO: BatUtil
       EXTERNAL_BRANCH: master
-      WATCH_PREFIX: W10MUI/
+      WATCH_PREFIX_1: W10MUI/
+      WATCH_PREFIX_2: esd-decrypter-wimlib/bin/bin64/
       STATE_FILE: .github/state/batutil_w10mui_last_sha.txt
 
     steps:
@@ -65,7 +66,7 @@ jobs:
             {
               echo "### Watch BatUtil W10MUI"
               echo "Primera ejecución: no hay SHA previo."
-              echo "Se forzará sincronización inicial de W10MUI/."
+              echo "Se forzará sincronización inicial."
             } >> "$GITHUB_STEP_SUMMARY"
           elif [ "${OLD_SHA}" = "${NEW_SHA}" ]; then
             {
@@ -81,7 +82,7 @@ jobs:
               "$compare_url" > compare.json
 
             jq -r '.files[].filename' compare.json > files_all.txt
-            grep -E "^${WATCH_PREFIX}" files_all.txt > files_w10mui.txt || true
+            grep -E "^(${WATCH_PREFIX_1}|${WATCH_PREFIX_2})" files_all.txt > files_w10mui.txt || true
 
             changed_count=$(wc -l < files_w10mui.txt | tr -d ' ')
             if [ "${changed_count}" -gt 0 ]; then
@@ -94,7 +95,7 @@ jobs:
             {
               echo "### Watch BatUtil W10MUI"
               echo "Comparando: ${OLD_SHA} -> ${NEW_SHA}"
-              echo "Cambios dentro de ${WATCH_PREFIX}: ${changed_count}"
+              echo "Cambios en carpetas vigiladas: ${changed_count}"
               if [ "${changed_count}" -gt 0 ]; then
                 echo ""
                 echo "Carpetas detectadas:"
@@ -119,11 +120,14 @@ jobs:
 
           tmp_dir=$(mktemp -d)
           git clone --depth 1 --filter=blob:none --sparse "https://github.com/${EXTERNAL_OWNER}/${EXTERNAL_REPO}.git" "$tmp_dir/src"
-          git -C "$tmp_dir/src" sparse-checkout set W10MUI
+          git -C "$tmp_dir/src" sparse-checkout set W10MUI esd-decrypter-wimlib/bin/bin64
 
           rm -rf W10MUI
           mkdir -p W10MUI
           cp -a "$tmp_dir/src/W10MUI/." W10MUI/
+          
+          mkdir -p W10MUI/Updates/bin
+          cp -a "$tmp_dir/src/esd-decrypter-wimlib/bin/bin64/." W10MUI/Updates/bin/
           rm -rf "$tmp_dir"
 
       - name: Apply local customizations
@@ -173,7 +177,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A W10MUI "${STATE_FILE}"
-            git commit -m "chore: sync W10MUI from ${EXTERNAL_OWNER}/${EXTERNAL_REPO}@${NEW_SHA}"
+            git commit -m "chore: sync W10MUI y bin64 desde ${EXTERNAL_OWNER}/${EXTERNAL_REPO}@${NEW_SHA}"
             git push
             echo "Sincronización aplicada y publicada." >> "$GITHUB_STEP_SUMMARY"
           else
