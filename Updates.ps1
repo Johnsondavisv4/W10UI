@@ -103,7 +103,8 @@ function Main {
 
     $BinDir = Split-Path -Parent $AriaExe
     $AriaScriptPath = Join-Path $BinDir "aria2_script.txt"
-    $raw.Content | Set-Content -Path $AriaScriptPath -Encoding UTF8
+    $texto = $raw.Content -replace '(?mi)^\s*checksum=.*$\n?', ''
+    $texto | Set-Content -Path $AriaScriptPath -Encoding UTF8
 
     Write-Host "Iniciando descarga de actualizaciones con aria2c..." -ForegroundColor Green
     

@@ -105,11 +105,11 @@ function Main {
     $rawApps = Invoke-WebRequest -Uri $ApiUrlApps -UseBasicParsing
     
     Write-Host "Buscando archivos objetivos en la respuesta..." -ForegroundColor Cyan
-    $textoApps = $rawApps.Content
+    $textoApps = $rawApps.Content -replace '(?mi)^\s*checksum=.*$\n?', ''
     
     if (!(Test-Path $TargetDir)) { New-Item -ItemType Directory -Path $TargetDir | Out-Null }
 
-    $RegexFiltroApps = '(?mi)http[^\n]+\n\s*out=[^\n]+language-(?!es)[^\n]+\n\s*checksum=[^\n]+\n*'
+    $RegexFiltroApps = '(?mi)http[^\n]+\n\s*out=[^\n]+language-(?!es)[^\n]+\n*'
     $textoAppsFiltrado = $textoApps -replace $RegexFiltroApps, ''
 
     $AppsTxt = Join-Path $BinDir "Apps.txt"
@@ -117,7 +117,7 @@ function Main {
 
     Write-Host "Obteniendo lista de descarga total..." -ForegroundColor Cyan
     $rawOS = Invoke-WebRequest -Uri $ApiUrlOS -UseBasicParsing
-    $textoOS = $rawOS.Content
+    $textoOS = $rawOS.Content -replace '(?mi)^\s*checksum=.*$\n?', ''
 
     $OsTxt = Join-Path $BinDir "Os.txt"
     $textoOS | Set-Content -Path $OsTxt -Encoding UTF8
