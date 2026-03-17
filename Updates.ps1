@@ -94,59 +94,20 @@ function Main {
         Get-Aria -TargetPath $AriaExe
     }
 
-    Write-Host "Descargando script aria2 para las actualizaciones..." -ForegroundColor Cyan
+    Write-Host "Conectando a UUP Dump..." -ForegroundColor Cyan
     $raw = Invoke-WebRequest -Uri $ApiUrl -UseBasicParsing
-    $lines = $raw.Content -split "`r?`n"
-
-    $downloads = @()
-    $currentUrl = $null
-    $currentOut = $null
-
-    foreach ($line in $lines) {
-        $trim = $line.Trim()
-
-        if ($trim.Length -eq 0 -or $trim.StartsWith("#")) {
-            if ($currentUrl -and $currentOut) {
-                $downloads += [PSCustomObject]@{ Url = $currentUrl; Out = $currentOut }
-                $currentUrl = $null
-                $currentOut = $null
-            }
-            continue
-        }
-
-        if ($trim -match '^https?://') {
-            $currentUrl = $trim
-            continue
-        }
-
-        if ($trim -match '^out=(.+)$') {
-            $currentOut = $matches[1].Trim()
-            continue
-        }
+    
+    if (-not (Test-Path $TargetDir)) {
+        New-Item -ItemType Directory -Path $TargetDir | Out-Null
     }
 
-    if ($currentUrl -and $currentOut) {
-        $downloads += [PSCustomObject]@{ Url = $currentUrl; Out = $currentOut }
-    }
+    $BinDir = Split-Path -Parent $AriaExe
+    $AriaScriptPath = Join-Path $BinDir "aria2_script.txt"
+    $raw.Content | Set-Content -Path $AriaScriptPath -Encoding UTF8
 
-    if ($downloads.Count -eq 0) {
-        Write-Error "No se encontraron descargas en la respuesta."
-        exit 1
-    }
-
-    Write-Host "Se encontraron $($downloads.Count) archivos. Iniciando descarga..." -ForegroundColor Green
-
-    foreach ($item in $downloads) {
-        $itemPath = Join-Path -Path $TargetDir -ChildPath $item.Out
-        $itemDir = Split-Path -Parent $itemPath
-        
-        if (-not (Test-Path $itemDir)) {
-            New-Item -ItemType Directory -Path $itemDir | Out-Null
-        }
-
-        Write-Host "-> Bajando: $($item.Out)" -ForegroundColor Yellow
-        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $itemDir -o (Split-Path -Leaf $itemPath) $item.Url
-    }
+    Write-Host "Iniciando descarga de actualizaciones con aria2c..." -ForegroundColor Green
+    
+    & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $TargetDir -i $AriaScriptPath
 
     Write-Host "Descarga completada." -ForegroundColor Cyan
     if (Test-Path $BinDir) {

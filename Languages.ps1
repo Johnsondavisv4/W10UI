@@ -90,62 +90,60 @@ function Main {
     )
 
     $id = GetID -IniPath $IniPath
-    $ApiUrl = "https://api.uupdump.net/get.php?id=$id"
+    $ApiUrl = "https://uupdump.net/get.php?id=$id&aria2=2"
 
     if (-not (Test-Path $AriaExe)) {
         Get-Aria -TargetPath $AriaExe
     }
 
-    Write-Host "Conectando a la API de UUP Dump..." -ForegroundColor Cyan
-    $json = (Invoke-WebRequest -Uri $ApiUrl).Content | ConvertFrom-Json -AsHashtable
+    Write-Host "Conectando a UUP Dump..." -ForegroundColor Cyan
+    $raw = Invoke-WebRequest -Uri $ApiUrl -UseBasicParsing
 
-    if ($json.response.error) {
-        Write-Error "La API devolvió error: $($json.response.error)"
-        exit 1
-    }
-
-    $archivos = $json.response.files
+    $texto = $raw.Content
 
     if (!(Test-Path $LangsDir)) { New-Item -ItemType Directory -Path $LangsDir | Out-Null }
     if (!(Test-Path $FodsDir)) { New-Item -ItemType Directory -Path $FodsDir | Out-Null }
 
-    $downloads = @()
     Write-Host "Buscando archivos objetivos en la respuesta..." -ForegroundColor Cyan
 
-    $RegexPack = "(?=.*LanguagePack)(?=.*es-mx).*"
-    $RegexFOD  = "(?=.*LanguageFeatures)(?=.*es-mx).*"
+    $RegexPack = '(?mi)^http[^\n]+\n\s*out=.*(?:LanguagePack).*es-mx.*$'
+    $RegexFOD  = '(?mi)^http[^\n]+\n\s*out=.*(?:LanguageFeatures).*es-mx.*$'
 
-    foreach ($nombreArchivo in $archivos.Keys) {
-        $archivoData = $archivos[$nombreArchivo]
-        $url = $archivoData.url
+    $MatchesPack = [regex]::Matches($texto, $RegexPack)
+    $MatchesFOD  = [regex]::Matches($texto, $RegexFOD)
 
-        if (-not $url) {
-            continue
-        }
-
-        if ($nombreArchivo -match $RegexPack) {
-            $destino = Join-Path $LangsDir $nombreArchivo
-            $downloads += [PSCustomObject]@{ Nombre = $nombreArchivo; Url = $url; Destino = $destino }
-        } elseif ($nombreArchivo -match $RegexFOD) {
-            $destino = Join-Path $FodsDir $nombreArchivo
-            $downloads += [PSCustomObject]@{ Nombre = $nombreArchivo; Url = $url; Destino = $destino }
-        }
-    }
-
-    if ($downloads.Count -eq 0) {
-        Write-Error "No se encontraron descargas en la respuesta."
+    if ($MatchesPack.Count -eq 0 -and $MatchesFOD.Count -eq 0) {
+        Write-Error "No se encontraron descargas coincidentes en la respuesta."
         exit 1
     }
 
-    Write-Host "Se encontraron $($downloads.Count) archivos coincidentes. Iniciando descarga..." -ForegroundColor Green
+    $BinDir = Split-Path -Parent $AriaExe
+    $LangTxt = Join-Path $BinDir "Lang.txt"
+    $OnDemandTxt = Join-Path $BinDir "OnDemand.txt"
 
-    foreach ($descarga in $downloads) {
-        Write-Host "-> Bajando: $($descarga.Nombre)"
-        $targetDir = Split-Path -Parent $descarga.Destino
-        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $targetDir -o (Split-Path -Leaf $descarga.Destino) $descarga.Url
+    if ($MatchesPack.Count -gt 0) {
+        $packContent = ($MatchesPack | ForEach-Object { $_.Value }) -join "`n"
+        $packContent | Set-Content -Path $LangTxt -Encoding UTF8
     }
 
-    Write-Host "¡Clasificación y descarga completadas! Archivos listos en \Langs y \OnDemand" -ForegroundColor Cyan
+    if ($MatchesFOD.Count -gt 0) {
+        $fodContent = ($MatchesFOD | ForEach-Object { $_.Value }) -join "`n"
+        $fodContent | Set-Content -Path $OnDemandTxt -Encoding UTF8
+    }
+
+    Write-Host "Se encontraron $($MatchesPack.Count) LanguagePacks y $($MatchesFOD.Count) FeaturesOnDemand. Iniciando descarga..." -ForegroundColor Green
+
+    if (Test-Path $LangTxt) {
+        Write-Host "-> Bajando: Language Packs"
+        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $LangsDir -i $LangTxt
+    }
+
+    if (Test-Path $OnDemandTxt) {
+        Write-Host "-> Bajando: Features On Demand"
+        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $FodsDir -i $OnDemandTxt
+    }
+
+    Write-Host "¡Clasificación y descarga completadas! Archivos listos en \Langs y \OnDemand\x64" -ForegroundColor Cyan
 
     if (Test-Path $BinDir) {
         Remove-Item -Path $BinDir -Recurse -Force
