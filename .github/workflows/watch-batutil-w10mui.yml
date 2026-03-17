@@ -1,4 +1,4 @@
-name: Watch BatUtil W10MUI
+name: Watch BatUtil W10MUI and UUP
 
 on:
   schedule:
@@ -16,7 +16,7 @@ jobs:
       EXTERNAL_REPO: BatUtil
       EXTERNAL_BRANCH: master
       WATCH_PREFIX_1: W10MUI/
-      WATCH_PREFIX_2: esd-decrypter-wimlib/bin/bin64/
+      WATCH_PREFIX_2: uup-converter-wimlib/
       STATE_FILE: .github/state/batutil_w10mui_last_sha.txt
 
     steps:
@@ -47,7 +47,7 @@ jobs:
           fi
           echo "sha=${old_sha}" >> "$GITHUB_OUTPUT"
 
-      - name: Compare commits and detect W10MUI changes
+      - name: Compare commits and detect changes
         id: compare
         env:
           OLD_SHA: ${{ steps.stored.outputs.sha }}
@@ -64,13 +64,13 @@ jobs:
           if [ -z "${OLD_SHA}" ]; then
             sync_needed=true
             {
-              echo "### Watch BatUtil W10MUI"
+              echo "### Watch BatUtil"
               echo "Primera ejecución: no hay SHA previo."
               echo "Se forzará sincronización inicial."
             } >> "$GITHUB_STEP_SUMMARY"
           elif [ "${OLD_SHA}" = "${NEW_SHA}" ]; then
             {
-              echo "### Watch BatUtil W10MUI"
+              echo "### Watch BatUtil"
               echo "Sin cambios upstream: ${NEW_SHA}"
             } >> "$GITHUB_STEP_SUMMARY"
           else
@@ -82,18 +82,18 @@ jobs:
               "$compare_url" > compare.json
 
             jq -r '.files[].filename' compare.json > files_all.txt
-            grep -E "^(${WATCH_PREFIX_1}|${WATCH_PREFIX_2})" files_all.txt > files_w10mui.txt || true
+            grep -E "^(${WATCH_PREFIX_1}|${WATCH_PREFIX_2})" files_all.txt > files_watched.txt || true
 
-            changed_count=$(wc -l < files_w10mui.txt | tr -d ' ')
+            changed_count=$(wc -l < files_watched.txt | tr -d ' ')
             if [ "${changed_count}" -gt 0 ]; then
               sync_needed=true
             fi
 
-            top_dirs=$(awk -F/ '{print $1}' files_w10mui.txt | sort -u | paste -sd ',' - || true)
-            sub_dirs=$(awk -F/ 'NF>=2{print $1"/"$2}' files_w10mui.txt | sort -u | paste -sd ',' - || true)
+            top_dirs=$(awk -F/ '{print $1}' files_watched.txt | sort -u | paste -sd ',' - || true)
+            sub_dirs=$(awk -F/ 'NF>=2{print $1"/"$2}' files_watched.txt | sort -u | paste -sd ',' - || true)
 
             {
-              echo "### Watch BatUtil W10MUI"
+              echo "### Watch BatUtil"
               echo "Comparando: ${OLD_SHA} -> ${NEW_SHA}"
               echo "Cambios en carpetas vigiladas: ${changed_count}"
               if [ "${changed_count}" -gt 0 ]; then
@@ -103,7 +103,7 @@ jobs:
                 echo "- Sub: ${sub_dirs}"
                 echo ""
                 echo "Archivos:"
-                sed 's/^/- /' files_w10mui.txt
+                sed 's/^/- /' files_watched.txt
               fi
             } >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -113,21 +113,37 @@ jobs:
           echo "top_dirs=${top_dirs}" >> "$GITHUB_OUTPUT"
           echo "sub_dirs=${sub_dirs}" >> "$GITHUB_OUTPUT"
 
-      - name: Replace local W10MUI from upstream
+      - name: Replace local folders from upstream
         if: steps.compare.outputs.sync_needed == 'true'
         run: |
           set -euo pipefail
 
           tmp_dir=$(mktemp -d)
           git clone --depth 1 --filter=blob:none --sparse "https://github.com/${EXTERNAL_OWNER}/${EXTERNAL_REPO}.git" "$tmp_dir/src"
-          git -C "$tmp_dir/src" sparse-checkout set W10MUI esd-decrypter-wimlib/bin/bin64
+          git -C "$tmp_dir/src" sparse-checkout set W10MUI uup-converter-wimlib
 
+          # --- W10MUI ---
           rm -rf W10MUI
           mkdir -p W10MUI
           cp -a "$tmp_dir/src/W10MUI/." W10MUI/
           
-          mkdir -p W10MUI/Updates/bin
-          cp -a "$tmp_dir/src/esd-decrypter-wimlib/bin/bin64/." W10MUI/Updates/bin/
+          # Copiar SOLO libwim-15.dll y wimlib-imagex.exe a W10MUI/Updates/bin (32 bits y 64 bits)
+          mkdir -p W10MUI/Updates/bin/bin64
+          
+          # Archivos de 32 bits
+          cp "$tmp_dir/src/uup-converter-wimlib/bin/libwim-15.dll" W10MUI/Updates/bin/
+          cp "$tmp_dir/src/uup-converter-wimlib/bin/wimlib-imagex.exe" W10MUI/Updates/bin/
+          
+          # Archivos de 64 bits
+          cp "$tmp_dir/src/uup-converter-wimlib/bin/bin64/libwim-15.dll" W10MUI/Updates/bin/bin64/
+          cp "$tmp_dir/src/uup-converter-wimlib/bin/bin64/wimlib-imagex.exe" W10MUI/Updates/bin/bin64/
+
+          # --- UUP-CONVERTER-WIMLIB ---
+          # Se copia entera, manteniendo sus propios binarios intactos para su uso independiente
+          rm -rf uup-converter-wimlib
+          mkdir -p uup-converter-wimlib
+          cp -a "$tmp_dir/src/uup-converter-wimlib/." uup-converter-wimlib/
+          
           rm -rf "$tmp_dir"
 
       - name: Apply local customizations
@@ -135,6 +151,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          # --- PERSONALIZACIÓN W10MUI ---
           mkdir -p W10MUI/Langs W10MUI/OnDemand W10MUI/Updates
           find W10MUI/Langs -mindepth 1 -delete
           find W10MUI/OnDemand -mindepth 1 -delete
@@ -158,6 +175,22 @@ jobs:
           rm -f W10MUI/README.md
           rm -f W10MUI/W10MUI_Mini.cmd
 
+
+          # --- PERSONALIZACIÓN UUP-CONVERTER-WIMLIB ---
+          mkdir -p uup-converter-wimlib/UUPs
+          find uup-converter-wimlib/UUPs -mindepth 1 -delete
+
+          rm -f uup-converter-wimlib/CustomAppsList.txt
+          rm -f uup-converter-wimlib/multi_arch_iso.cmd
+          rm -f uup-converter-wimlib/ReadMe.html
+          rm -f uup-converter-wimlib/README.md
+
+          if [ ! -f ConvertConfig.ini ]; then
+            echo "No existe ConvertConfig.ini en la raiz del repo local."
+            exit 1
+          fi
+          cp -f ConvertConfig.ini uup-converter-wimlib/ConvertConfig.ini
+
       - name: Update local state file after sync
         if: steps.compare.outputs.sync_needed == 'true'
         env:
@@ -176,8 +209,8 @@ jobs:
           if git status --porcelain | grep . >/dev/null; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A W10MUI "${STATE_FILE}"
-            git commit -m "chore: sync W10MUI y bin64 desde ${EXTERNAL_OWNER}/${EXTERNAL_REPO}@${NEW_SHA}"
+            git add -A W10MUI uup-converter-wimlib "${STATE_FILE}"
+            git commit -m "chore: sync W10MUI y uup-converter-wimlib desde ${EXTERNAL_OWNER}/${EXTERNAL_REPO}@${NEW_SHA}"
             git push
             echo "Sincronización aplicada y publicada." >> "$GITHUB_STEP_SUMMARY"
           else
