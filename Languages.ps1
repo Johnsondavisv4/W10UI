@@ -135,12 +135,12 @@ function Main {
 
     if (Test-Path $LangTxt) {
         Write-Host "-> Bajando: Language Packs"
-        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $LangsDir -i $LangTxt
+        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 16 -s 16 -j 16 -d $LangsDir -i $LangTxt
     }
 
     if (Test-Path $OnDemandTxt) {
         Write-Host "-> Bajando: Features On Demand"
-        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $FodsDir -i $OnDemandTxt
+        & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 16 -s 16 -j 16 -d $FodsDir -i $OnDemandTxt
     }
 
     Write-Host "¡Clasificación y descarga completadas! Archivos listos en \Langs y \OnDemand\x64" -ForegroundColor Cyan

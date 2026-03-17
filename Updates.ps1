@@ -107,7 +107,7 @@ function Main {
 
     Write-Host "Iniciando descarga de actualizaciones con aria2c..." -ForegroundColor Green
     
-    & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 5 -s 5 -d $TargetDir -i $AriaScriptPath
+    & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 16 -s 16 -j 16 -d $TargetDir -i $AriaScriptPath
 
     Write-Host "Descarga completada." -ForegroundColor Cyan
     if (Test-Path $BinDir) {
