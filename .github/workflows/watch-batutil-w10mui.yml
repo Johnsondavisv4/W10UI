@@ -191,6 +191,7 @@ jobs:
           fi
           cp -f ConvertConfig.ini uup-converter-wimlib/ConvertConfig.ini
           cp -f CustomAppsList.txt uup-converter-wimlib/CustomAppsList.txt
+          cp -f ei.cfg uup-converter-wimlib/ei.cfg
 
       - name: Update local state file after sync
         if: steps.compare.outputs.sync_needed == 'true'
