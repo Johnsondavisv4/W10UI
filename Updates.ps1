@@ -9,13 +9,11 @@ $ConfigPath = Join-Path $BaseDir "data.ini"
 $BinDir = Join-Path $BaseDir "bin"
 $AriaPath = Join-Path $BinDir "aria2c.exe"
 
-if (Test-Path (Join-Path $BaseDir "W10MUI")) {
-    $WorkDir = Join-Path $BaseDir "W10MUI"
+if (Test-Path (Join-Path $BaseDir "W10UI")) {
+    $DownloadsDir = Join-Path $BaseDir "W10UI"
 } else {
-    $WorkDir = $BaseDir
+    $DownloadsDir = $BaseDir
 }
-
-$DownloadsDir = Join-Path $WorkDir "Updates"
 
 function GetID {
     param ([string]$IniPath)
