@@ -17,7 +17,7 @@ if (Test-Path (Join-Path $BaseDir "uup-converter-wimlib")) {
 
 $DirUUPs = Join-Path $WorkDir "UUPs"
 
-function GetID {
+function Get-Data {
     param ([string]$IniPath)
 
     if (-not (Test-Path $IniPath)) {
@@ -45,26 +45,79 @@ function GetID {
         exit 1
     }
 
-    $searchTerms = if ($isLatest) { "$version $arch" } else { "$version $rev $arch" }
-    $query = [uri]::EscapeDataString($searchTerms)
-    $url = "https://api.uupdump.net/listid.php?search=$query"
-    $resp = Invoke-RestMethod -Uri $url
+    return @{ version = $version; arch = $arch; rev = $rev; lang = $lang; isLatest = $isLatest }
+}
 
-    $items = $resp.response.builds.PSObject.Properties | ForEach-Object { $_.Value }
-    $match = $items |
-        Where-Object {
-            $_.arch -eq $arch -and
-            $_.title -match [regex]::Escape($version) -and
-            ($isLatest -or $_.title -match [regex]::Escape($rev))
-        } |
-        Select-Object -First 1
+function GetID {
+    param (
+        [string]$version,
+        [string]$arch,
+        [string]$rev,
+        [bool]$isLatest
+    )
 
-    if (-not $match) {
-        Write-Error "No se encontro UpdateID para Version=$version, Rev=$rev y Arch=$arch."
-        exit 1
+    $searchTerms1 = if ($isLatest) { "Windows 11, version $version $arch" } else { "Windows 11, version $version $rev $arch" }
+    $query1 = [uri]::EscapeDataString($searchTerms1)
+    $url1 = "https://api.uupdump.net/listid.php?search=$query1"
+    
+    $resp1 = Invoke-RestMethod -Uri $url1
+
+    if ($resp1.response.builds) {
+        $items1 = $resp1.response.builds.PSObject.Properties | ForEach-Object { $_.Value }
+        
+        $match = $items1 |
+            Where-Object {
+                $_.arch -eq $arch -and
+                $_.title -match [regex]::Escape($version) -and
+                ($isLatest -or $_.title -match [regex]::Escape($rev))
+            } |
+            Select-Object -First 1
+
+        if ($match) {
+            Write-Host "-> Éxito en la primera búsqueda ($version)." -ForegroundColor Green
+            return $match.uuid
+        }
+    } elseif ($resp1.response.error -eq "SEARCH_NO_RESULTS") {
+        $buildBase = ""
+        switch ($version) {
+            "25H2" { $buildBase = "26200" }
+            "24H2" { $buildBase = "26100" }
+            "23H2" { $buildBase = "22631" }
+            "22H2" { $buildBase = "22621" }
+            "21H2" { $buildBase = "22000" }
+        }
+
+        if ($buildBase) {
+            Write-Host "-> Primera búsqueda fallida (SEARCH_NO_RESULTS). Intentando segunda búsqueda..." -ForegroundColor Yellow
+            
+            $searchTerms2 = if ($isLatest) { "Update for Windows 11 $buildBase $arch" } else { "Update for Windows 11 $buildBase $rev $arch" }
+            $query2 = [uri]::EscapeDataString($searchTerms2)
+            $url2 = "https://api.uupdump.net/listid.php?search=$query2"
+            
+            $resp2 = Invoke-RestMethod -Uri $url2
+            
+            if ($resp2.response.builds) {
+                $items2 = $resp2.response.builds.PSObject.Properties | ForEach-Object { $_.Value }
+                
+                $match = $items2 |
+                    Where-Object {
+                        $_.arch -eq $arch -and
+                        $_.title -match "Update for Windows 11" -and
+                        $_.title -match [regex]::Escape($buildBase) -and
+                        ($isLatest -or $_.title -match [regex]::Escape($rev))
+                    } |
+                    Select-Object -First 1
+                    
+                if ($match) {
+                    Write-Host "-> Éxito en la segunda búsqueda (Update for Windows 11 - $buildBase)." -ForegroundColor Green
+                    return $match.uuid
+                }
+            }
+        }
     }
 
-    return @{ uuid = $match.uuid; lang = $lang }
+    Write-Error "No se encontro UpdateID para Version=$version, Rev=$rev y Arch=$arch en ninguna de las búsquedas."
+    exit 1
 }
 
 function Get-Aria {
@@ -88,9 +141,9 @@ function Main {
         [string]$TargetDir
     )
 
-    $idData = GetID -IniPath $IniPath
-    $id = $idData.uuid
-    $Lang = $idData.lang
+    $data = Get-Data -IniPath $IniPath
+    $id = GetID -version $data.version -arch $data.arch -rev $data.rev -isLatest $data.isLatest
+    $Lang = $data.lang
     
     $ApiUrlApps = "https://uupdump.net/get.php?id=$id&pack=neutral&edition=app&aria2=2"
     $ApiUrlOS   = "https://uupdump.net/get.php?id=$id&pack=$Lang&edition=professional&aria2=2"
