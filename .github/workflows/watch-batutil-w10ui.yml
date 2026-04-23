@@ -174,6 +174,7 @@ jobs:
           cp -f ConvertConfig.ini uup-converter-wimlib/ConvertConfig.ini
           cp -f CustomAppsList.txt uup-converter-wimlib/CustomAppsList.txt
           cp -f ei.cfg uup-converter-wimlib/ei.cfg
+          cp -f To_IoT_LTSC.cmd uup-converter-wimlib/To_IoT_LTSC.cmd
 
       - name: Update local state file after sync
         if: steps.compare.outputs.sync_needed == 'true'
