@@ -77,9 +77,12 @@ function GetID {
             Write-Host "-> Éxito en la primera búsqueda ($version)." -ForegroundColor Green
             return $match.uuid
         }
-    } elseif ($resp1.response.error -eq "SEARCH_NO_RESULTS") {
+    }
+    
+    if ($resp1.response.error -eq "SEARCH_NO_RESULTS" -or -not $match) {
         $buildBase = ""
         switch ($version) {
+            "26H2" { $buildBase = "26300" }
             "25H2" { $buildBase = "26200" }
             "24H2" { $buildBase = "26100" }
             "23H2" { $buildBase = "22631" }
@@ -88,7 +91,7 @@ function GetID {
         }
 
         if ($buildBase) {
-            Write-Host "-> Primera búsqueda fallida (SEARCH_NO_RESULTS). Intentando segunda búsqueda..." -ForegroundColor Yellow
+            Write-Host "-> Primera búsqueda sin coincidencias. Intentando segunda búsqueda..." -ForegroundColor Yellow
             
             $searchTerms2 = if ($isLatest) { "Update for Windows 11 $buildBase $arch" } else { "Update for Windows 11 $buildBase $rev $arch" }
             $query2 = [uri]::EscapeDataString($searchTerms2)

@@ -78,6 +78,7 @@ function Get-BuildInfo {
     if ($resp1.response.error -eq "SEARCH_NO_RESULTS" -or -not $match) {
         $buildBase = ""
         switch ($version) {
+            "26H2" { $buildBase = "26300" }
             "25H2" { $buildBase = "26200" }
             "24H2" { $buildBase = "26100" }
             "23H2" { $buildBase = "22631" }
