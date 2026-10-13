@@ -1426,12 +1426,29 @@ choice /c 0Q /n
 if errorlevel 1 (exit /b) else (rem.)
 
 :SET_DYNAMIC_DVDISO
-set "_winver=Win10"
-set "_chk_b=!_build!"
+set "_tgt_wim="
+if defined WimFile if exist "ISOFOLDER\sources\!WimFile!" set "_tgt_wim=ISOFOLDER\sources\!WimFile!"
+if not defined _tgt_wim if exist "ISOFOLDER\sources\install.wim" set "_tgt_wim=ISOFOLDER\sources\install.wim"
+if not defined _tgt_wim if exist "ISOFOLDER\sources\install.esd" set "_tgt_wim=ISOFOLDER\sources\install.esd"
+set "_img_b="
+set "_img_sp="
+if defined _tgt_wim (
+    for /f "tokens=3 delims=<>" %%# in ('imagex /info "!_tgt_wim!" 1 2^>nul ^| find /i "<BUILD>"') do if not "%%#"=="" set "_img_b=%%#"
+    for /f "tokens=3 delims=<>" %%# in ('imagex /info "!_tgt_wim!" 1 2^>nul ^| find /i "<SPBUILD>"') do if not "%%#"=="" set "_img_sp=%%#"
+)
+
+set "_chk_b="
+if not "!_img_b!"=="" set "_chk_b=!_img_b!"
+if "!_chk_b!"=="" if not "!isomaj!"=="" set "_chk_b=!isomaj!"
+if "!_chk_b!"=="" if not "!isover!"=="" for /f "tokens=1 delims=." %%a in ("!isover!") do set "_chk_b=%%a"
+if "!_chk_b!"=="" if not "!_label!"=="" for /f "tokens=1 delims=." %%a in ("!_label!") do (
+    if %%a geq 10240 set "_chk_b=%%a"
+)
+if "!_chk_b!"=="" set "_chk_b=!_build!"
 if "!_chk_b!"=="" set "_chk_b=%_build%"
 if "!_chk_b!"=="" if defined uupver for /f "tokens=1 delims=." %%a in ("!uupver!") do set "_chk_b=%%a"
-if "!_chk_b!"=="" if defined isover for /f "tokens=1 delims=." %%a in ("!isover!") do set "_chk_b=%%a"
 
+set "_winver=Win10"
 if not "!_chk_b!"=="" (
     if !_chk_b! geq 22000 set "_winver=Win11"
 )
@@ -1452,10 +1469,14 @@ if "!_chk_b!"=="17763" set "_winh2=1809"
 if "!_chk_b!"=="14393" set "_winh2=1607"
 if not defined _winh2 set "_winh2=!_chk_b!"
 
-set "_uupv=!uupver!"
-if "!_uupv!"=="" set "_uupv=!isover!"
 set "_winrev="
-if not "!_uupv!"=="" for /f "tokens=2 delims=." %%a in ("!_uupv!") do set "_winrev=%%a"
+if not "!_img_sp!"=="" set "_winrev=!_img_sp!"
+if "!_winrev!"=="" if not "!isomin!"=="" if not "!isomin!"=="0" set "_winrev=!isomin!"
+if "!_winrev!"=="" if not "!isover!"=="" for /f "tokens=2 delims=." %%a in ("!isover!") do set "_winrev=%%a"
+if "!_winrev!"=="" if not "!_label!"=="" for /f "tokens=2 delims=." %%a in ("!_label!") do (
+    if not "%%a"=="" set "_winrev=%%a"
+)
+if "!_winrev!"=="" if not "!uupver!"=="" for /f "tokens=2 delims=." %%a in ("!uupver!") do set "_winrev=%%a"
 if "!_winrev!"=="" set "_winrev=!_chk_b!"
 
 set "_winedt=!_edtn!"
