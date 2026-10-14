@@ -595,7 +595,7 @@ find /i "<EDITIONID>%%#</EDITIONID>" bin\infoall.txt %_Nul1% && set %%#=0
 for %%# in (%vEditions%) do (
 if !%%#! equ 1 set /a _all+=1
 )
-if %_all% equ 0 goto :E_None
+if %_all% equ 0 if not defined AutoEditions goto :E_None
 set _doProf=0
 set _doProN=0
 set _doHome=0
@@ -641,7 +641,9 @@ if !%%#! equ 1 call :doData %%#
 if %_doHome% equ 1 for %%# in (%_elHome%) do (
 if !%%#! equ 1 call :doData %%#
 )
-if %modded% equ 1 (goto :ISOCREATE) else (goto :E_None)
+if %modded% equ 1 goto :ISOCREATE
+if defined AutoEditions goto :ISOCREATE
+goto :E_None
 
 :doDism
 if %_exDism% equ 0 del /f /q "%_dLog%\DismVirtualEditions.log" %_Nul3%
@@ -679,7 +681,9 @@ if %_build% geq 19041 if %winbuild% lss 17133 if exist "%SysPath%\ext-ms-win-sec
 del /f /q %SysPath%\ext-ms-win-security-slc-l1-1-0.dll %_Nul3%
 if /i not %xOS%==x86 del /f /q %SystemRoot%\SysWOW64\ext-ms-win-security-slc-l1-1-0.dll %_Nul3%
 )
-if %modded% equ 1 (goto :ISOCREATE) else (goto :E_None)
+if %modded% equ 1 goto :ISOCREATE
+if defined AutoEditions goto :ISOCREATE
+goto :E_None
 
 :doData
 if defined _term exit /b
@@ -862,7 +866,10 @@ ren ISOFOLDER\sources\temp.wim %WimFile%
 )
 for /f "tokens=3 delims=: " %%# in ('imagex /info ISOFOLDER\sources\%WimFile% ^|findstr /i /b /c:"Image Count"') do set finalimages=%%#
 if %finalimages% gtr 1 if not exist "ei.cfg" if not exist "UUPs\ei.cfg" if exist ISOFOLDER\sources\ei.cfg del /f /q ISOFOLDER\sources\ei.cfg
-if %DeleteSource% equ 1 (
+if defined AutoEditions (
+call :dDeleteExcept
+call :dPREPARE
+) else if %DeleteSource% equ 1 (
 call :dk_color1 %Blue% "=== Deleting Source Edition{s} . . ." 4 5
 if %_doProf% equ 1 call :dDelete Professional
 if %_doProN% equ 1 call :dDelete ProfessionalN
@@ -934,6 +941,27 @@ find /i "<EDITIONID>%1</EDITIONID>" bin\info%%#.txt %_Nul3% && (
   )
 )
 del /f /q bin\info*.txt %_Nul3%
+exit /b
+
+:validateTargets
+set "_targetInvalid=0"
+for %%A in (%AutoEditions%) do (
+set "_targetKnown=0"
+for %%B in (Core CoreSingleLanguage Professional ProfessionalN Enterprise EnterpriseN EnterpriseS EnterpriseSN %vEditions%) do if /i "%%~A"=="%%~B" set "_targetKnown=1"
+if "!_targetKnown!"=="0" set "_targetInvalid=1"
+)
+exit /b
+
+:dDeleteExcept
+for /f "tokens=3 delims=: " %%# in ('imagex /info ISOFOLDER\sources\%WimFile% ^|findstr /i /b /c:"Image Count"') do set dimages=%%#
+for /L %%# in (%dimages%,-1,1) do (
+set "_edid="
+for /f "tokens=3 delims=<>" %%A in ('imagex /info ISOFOLDER\sources\%WimFile% %%# ^| find /i "<EDITIONID>"') do if not defined _edid set "_edid=%%A"
+set "_keep=0"
+for %%A in (%AutoEditions%) do if /i "%%~A"=="!_edid!" set "_keep=1"
+if "!_keep!"=="0" wimlib-imagex.exe delete ISOFOLDER\sources\%WimFile% %%# --soft %_Nul3%
+)
+for /f "tokens=3 delims=: " %%# in ('imagex /info ISOFOLDER\sources\%WimFile% ^|findstr /i /b /c:"Image Count"') do set finalimages=%%#
 exit /b
 
 :doSort
@@ -1023,6 +1051,8 @@ if %EditionHome% equ 0 if %EditionProf% equ 0 if %EditionProN% equ 0 if %Edition
 if %_iso% equ 1 rmdir /s /q "%ISOdir%\"
 set "MESSAGE=No supported source edition detected"&goto :E_MSG
 )
+if defined AutoEditions call :validateTargets
+if %_targetInvalid% equ 1 set "MESSAGE=Unsupported target edition in AutoEditions"&goto :E_MSG
 if %EditionProf% equ 1 set /a _sum+=5
 if %EditionProN% equ 1 set /a _sum+=4
 if %EditionHome% equ 1 set /a _sum+=1

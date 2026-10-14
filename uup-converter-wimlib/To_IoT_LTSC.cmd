@@ -282,6 +282,7 @@ goto :E_None
 
 :skipcopy
 if %EditionLTSC% equ 0 goto :E_None
+find /i "<EDITIONID>IoTEnterpriseS</EDITIONID>" bin\infoall.txt %_Nul1% && goto :ISOCREATE
 set /a index=%images%
 
 :doDism
@@ -408,8 +409,8 @@ exit /b
 for /f "tokens=3 delims=: " %%# in ('imagex /info ISOFOLDER\sources\%WimFile% ^|findstr /i /b /c:"Image Count"') do set finalimages=%%#
 if %finalimages% gtr 1 if not exist "ei.cfg" if not exist "UUPs\ei.cfg" if exist ISOFOLDER\sources\ei.cfg del /f /q ISOFOLDER\sources\ei.cfg
 
-call :dk_color1 %Blue% "=== Deleting Source Edition{s} . . ." 4 5
-call :dDelete EnterpriseS
+call :dk_color1 %Blue% "=== Keeping only target edition . . ." 4 5
+call :dDeleteExcept
 call :dPREPARE
 
 call :dk_color1 %Blue% "=== Rebuilding %WimFile% . . ." 4 5
@@ -439,6 +440,15 @@ find /i "<EDITIONID>%1</EDITIONID>" bin\info%%#.txt %_Nul3% && (
   )
 )
 del /f /q bin\info*.txt %_Nul3%
+exit /b
+
+:dDeleteExcept
+for /f "tokens=3 delims=: " %%# in ('imagex /info ISOFOLDER\sources\%WimFile% ^|findstr /i /b /c:"Image Count"') do set dimages=%%#
+for /L %%# in (%dimages%,-1,1) do (
+set "_edid="
+for /f "tokens=3 delims=<>" %%A in ('imagex /info ISOFOLDER\sources\%WimFile% %%# ^| find /i "<EDITIONID>"') do if not defined _edid set "_edid=%%A"
+if /i not "!_edid!"=="IoTEnterpriseS" wimlib-imagex.exe delete ISOFOLDER\sources\%WimFile% %%# --soft %_Nul3%
+)
 exit /b
 
 
