@@ -547,7 +547,6 @@ function Register-DigitalLicenseTicket {
         Restart-Service -Name "ClipSVC" -Force -ErrorAction SilentlyContinue
     }
     catch {
-        Start-Sleep -Seconds 2
     }
 
     Start-Sleep -Seconds 2
@@ -562,13 +561,13 @@ function Register-DigitalLicenseTicket {
         $Sys32Path = "$env:SystemRoot\System32"
         if (Test-Path "$Sys32Path\clipup.exe") {
             Start-Process -FilePath "$Sys32Path\clipup.exe" -ArgumentList "-v -o" -NoNewWindow -Wait
-        }
-
-        $ProductInstance = Get-CimInstance -ClassName "SoftwareLicensingProduct" -Filter "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue
-        if ($ProductInstance) {
-            $null = Invoke-CimMethod -InputObject $ProductInstance -MethodName "Activate" -ErrorAction SilentlyContinue
-        }
-    }    
+        }        
+    }
+    
+    $ProductInstance = Get-CimInstance -ClassName "SoftwareLicensingProduct" -Filter "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue
+    if ($ProductInstance) {
+        $null = Invoke-CimMethod -InputObject $ProductInstance -MethodName "Activate" -ErrorAction SilentlyContinue
+    }
 }
 
 function Restore-EnvironmentState {
