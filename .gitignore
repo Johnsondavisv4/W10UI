@@ -8,6 +8,8 @@
 !Updates.ps1
 !data.ini
 !.gitattributes
+!01 Setup Inicial LTSC.cmd
+!HWID_PS.ps1
 
 # 3. Herramientas C++
 !/Herramientas C++/
