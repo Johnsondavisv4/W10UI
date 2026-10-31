@@ -1,0 +1,27 @@
+====================================================================
+DRIVER INTEGRATION INFORMATION (W10UI)
+====================================================================
+
+1. HOW IT WORKS:
+   The script scans this directory recursively, searching inside all subfolders for 
+   valid hardware description files (.inf). 
+   - If a folder contains both setup executables (.exe/.msi) and raw files (.inf), 
+     the script will automatically ignore the executables and inject the raw driver.
+   - If a folder ONLY contains an unextracted .exe or .msi file, the script will 
+     skip it entirely. It must be extracted first.
+
+2. RECOMMENDED EXTRACTED STRUCTURE:
+   W10UI\Drivers\ALL\
+    ├── info.txt (This file)
+    ├── (Put the drivers here)
+
+    Subfolders can contain manufacturer setup tools 
+    as long as loose .inf, .sys, and .cat files 
+    are present alongside them.
+
+
+3. NOTE ON THE "ALL" FOLDER:
+   Any valid driver placed in this "ALL" directory will be automatically injected 
+   into all installation stages (Operating System, Installer/WinPE, and Recovery/WinRE). 
+   This ensures that your critical network and hardware drivers are fully operational 
+   from the very beginning of the Windows setup process.
