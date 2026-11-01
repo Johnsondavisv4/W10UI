@@ -1,6 +1,6 @@
 <!-- : Begin batch script
 @setlocal DisableDelayedExpansion
-@set uivr=v125
+@set uivr=v128
 @echo off
 :: ### Creation Method ###
 ::
@@ -1051,8 +1051,9 @@ if %EditionHome% equ 0 if %EditionProf% equ 0 if %EditionProN% equ 0 if %Edition
 if %_iso% equ 1 rmdir /s /q "%ISOdir%\"
 set "MESSAGE=No supported source edition detected"&goto :E_MSG
 )
+set "_targetInvalid=0"
 if defined AutoEditions call :validateTargets
-if %_targetInvalid% equ 1 set "MESSAGE=Unsupported target edition in AutoEditions"&goto :E_MSG
+if %_targetInvalid% equ 1 (set "MESSAGE=Unsupported target edition in AutoEditions"&goto :E_MSG)
 if %EditionProf% equ 1 set /a _sum+=5
 if %EditionProN% equ 1 set /a _sum+=4
 if %EditionHome% equ 1 set /a _sum+=1

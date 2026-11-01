@@ -565,7 +565,8 @@ set uupmin=%revmin%
 if not exist "%SystemRoot%\temp\" mkdir "%SystemRoot%\temp" %_Nul3%
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\Servicing\Packages\Package_for_RollupFix*.mum --dest-dir=.\bin\temp --no-acls --no-attributes %_Nul3%
 for /f %%# in ('dir /b /a:-d /od bin\temp\Package_for_RollupFix*.mum') do copy /y "bin\temp\%%#" %SystemRoot%\temp\update.mum %_Nul1%
-call :datemum uupdate isotime
+if exist "bin\temp\Package_for_RollupFix*.mum" call :datemum uupdate isotime
+if not exist "bin\temp\Package_for_RollupFix*.mum" set branch=WinBuild
 )
 if %uupmin% gtr %revmin% (
 if not exist "%SystemRoot%\temp\" mkdir "%SystemRoot%\temp" %_Nul3%
