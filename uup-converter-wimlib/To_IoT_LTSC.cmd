@@ -845,9 +845,14 @@ set "_tgt_wim="
 if defined WimFile if exist "ISOFOLDER\sources\!WimFile!" set "_tgt_wim=ISOFOLDER\sources\!WimFile!"
 if not defined _tgt_wim if exist "ISOFOLDER\sources\install.wim" set "_tgt_wim=ISOFOLDER\sources\install.wim"
 if not defined _tgt_wim if exist "ISOFOLDER\sources\install.esd" set "_tgt_wim=ISOFOLDER\sources\install.esd"
+if not defined _tgt_wim if exist "ISOFOLDER\sources\install.swm" set "_tgt_wim=ISOFOLDER\sources\install.swm"
 set "_img_b="
 set "_img_sp="
+set "_img_count="
+set "_img_edition="
 if defined _tgt_wim (
+    for /f "tokens=3 delims=: " %%# in ('imagex /info "!_tgt_wim!" 2^>nul ^| findstr /i /b /c:"Image Count"') do set "_img_count=%%#"
+    for /f "tokens=3 delims=<>" %%# in ('imagex /info "!_tgt_wim!" 1 2^>nul ^| find /i "<EDITIONID>"') do set "_img_edition=%%#"
     for /f "tokens=3 delims=<>" %%# in ('imagex /info "!_tgt_wim!" 1 2^>nul ^| find /i "<BUILD>"') do if not "%%#"=="" set "_img_b=%%#"
     for /f "tokens=3 delims=<>" %%# in ('imagex /info "!_tgt_wim!" 1 2^>nul ^| find /i "<SPBUILD>"') do if not "%%#"=="" set "_img_sp=%%#"
 )
@@ -898,9 +903,15 @@ set "_winedt=!_edtn!"
 if "!_winedt!"=="" set "_winedt=!editionid!"
 if "!_winedt!"=="" set "_winedt=IoTEnterpriseS"
 
+:: Use the final install image rather than the initial edition selection.
+if defined _img_count (
+    if !_img_count! gtr 1 set "_winedt=MULTI"
+    if !_img_count! equ 1 if defined _img_edition set "_winedt=!_img_edition!"
+)
+
 set "_winlang=!langid!"
 if "!_winlang!"=="" set "_winlang=!_mui!"
-if "!_winlang!"=="" set "_winlang=es-mx"
+if "!_winlang!"=="" set "_winlang=UNKNOWN"
 for %%# in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do set "_winlang=!_winlang:%%#=%%#!"
 
 set "DVDISO=!_winver!_!_winh2!_!_winedt!_!_winrev!_!_winlang!"

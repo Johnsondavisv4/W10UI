@@ -22,10 +22,11 @@
 !/W10UI/Remove_Failure_MountDir_TempDir.cmd
 !/W10UI/W10UI.cmd
 !/W10UI/W10UI.ini
-!/W10UI/bin/*
 !/W10UI/Drivers/
 !/W10UI/Drivers/ALL/
 !/W10UI/Drivers/ALL/info.txt
+!/W10UI/bin/
+!/W10UI/bin/*
 
 # 5. uup-converter-wimlib y sus binarios específicos
 !/uup-converter-wimlib/
@@ -33,4 +34,5 @@
 !/uup-converter-wimlib/To_IoT_LTSC.cmd
 !/uup-converter-wimlib/create_virtual_editions.cmd
 !/uup-converter-wimlib/ConvertConfig.ini
+!/uup-converter-wimlib/bin/
 !/uup-converter-wimlib/bin/*

@@ -1,5 +1,5 @@
 @setlocal DisableDelayedExpansion
-@set uiv=v10.65
+@set uiv=v10.66m
 @echo off
 :: enable debug mode, you must also set target and repo (if updates are not beside the script)
 set _Debug=0
@@ -26,7 +26,7 @@ set "Net35Source="
 :: Cleanup OS images to "compress" superseded components (might take long time to complete)
 set Cleanup=0
 
-:: Rebase OS images to "remove" superseded components (warning: break "Reset this PC" feature)
+:: Rebase OS images to "remove" superseded components (warning: break "Reset this PC" feature for Win10 v1809 or earlier)
 :: require first to set Cleanup=1
 :: change to 2 to run rebase after each LCU for builds 26052 and later
 set ResetBase=0
@@ -42,9 +42,10 @@ set LCUwinre=0
 :: Expand Cumulative Update and install from loose files via update.mum
 :: applicable only for builds 22621 and later
 :: for builds 26052 and later:
-:: auto enabled
-:: change to 2 or 3 to disable and add highest LCU msu only
-:: auto set to 3 for insider builds with baseline KB5122055
+:: - auto enabled
+:: - change to 2 or 3 to disable and add highest LCU msu only
+:: - auto set to 3 for insider builds with baseline KB5122055
+:: - auto set to 3 if LCU msu contain MumX v2
 set LCUmsuExpand=0
 
 :: update ISO boot files bootmgr/memtest/efisys.bin from Cumulative Update
@@ -447,6 +448,7 @@ set _skpp=0
 set uupboot=0
 set peTarget=0
 set pe_lcu=0
+set msumumx=0
 if not defined _all set _all=1
 if %_init%==1 if "!target!"=="" if exist "*.wim" (for /f "tokens=* delims=" %%# in ('dir /b /a:-d "*.wim" ^| findstr /i /v "Windows1.*\-KB"') do set "target=!_work!\%%~nx#")
 if "!target!"=="" set "target=%SystemDrive%"
@@ -654,6 +656,15 @@ if %_build% geq 26052 (
 if %LCUmsuExpand% equ 2 (set LCUmsuExpand=0) else if %LCUmsuExpand% equ 3 (set LCUmsuExpand=0) else if %LCUmsuExpand% equ 9 (set LCUmsuExpand=0) else (set LCUmsuExpand=1)
 if exist "!repo!\*Windows1*-KB5122055*.msu" (set LCUmsuExpand=0&set u_msulcu=3)
 )
+if %online%==0 if %_build% geq 26052 if exist "!repo!\*Windows1*-KB*%arch%*.msu" (
+if not exist "!_cabdir!\mum_x\" mkdir "!_cabdir!\mum_x"
+for /f "tokens=* delims=" %%# in ('dir /b /on "!repo!\*Windows1*-KB*%arch%*.msu"') do (set "package=%%#"&call :scanmsu)
+if exist "!_cabdir!\mum_x\" rmdir /s /q "!_cabdir!\mum_x\" %_Nul1%
+)
+if %msumumx% equ 1 (
+if %_embd% equ 0 if %LCUmsuExpand% equ 1 echo.&echo Turbo MumX v2 Container detected. LCUmsuExpand will be disabled.
+set LCUmsuExpand=0&set u_msulcu=3
+)
 if %_build% geq 26052 (
 if %u_msulcu% equ 2 if %ResetBase% equ 2 set ResetBase=1
 if %u_msulcu% equ 3 if %ResetBase% equ 2 set ResetBase=1
@@ -770,6 +781,35 @@ if exist "%SystemRoot%\temp\Package_for_RollupFix*.mumx*" set pe_lcu=1
 del /f /q %SystemRoot%\temp\*.mum %_Nul3%
 goto :eof
 
+:scanmsu
+expand.exe -d -f:*Windows*.psf "!repo!\!package!" %_Nul2% | findstr /i %arch%\.psf %_Nul3% && goto :eof
+if %_wlib% equ 1 !_wimlib! dir "!repo!\!package!" %_Nul2% | findstr /i %arch%\.mumx %_Nul3% && (call :checkmsu)
+if %_wlib% equ 0 dism.exe /English /List-Image /ImageFile:"!repo!\!package!" /Index:1 %_Nul2% | findstr /i %arch%\.mumx %_Nul3% && (call :checkmsu)
+goto :eof
+
+:checkmsu
+if not defined msg_mumx if %_embd% equ 0 (
+echo.
+echo ============================================================
+echo Checking LCU MumX version...
+echo ============================================================
+echo.
+)
+set msg_mumx=1
+set loc_mumx=1
+if exist "!_cabdir!\mum_x\*.mumx*" del /f /q "!_cabdir!\mum_x\*.mumx*" %_Nul1%
+if %_wlib% equ 1 !_wimlib! extract "!repo!\!package!" 1 *Windows*.mumx* --dest-dir="!_cabdir!\mum_x" --nullglob %_Null%
+if %_wlib% equ 0 for /f "tokens=1 delims=\" %%# in ('dism.exe /English /List-Image /ImageFile:"!repo!\!package!" /Index:1 ^| findstr /i /r "%arch%\.mumx"') do %_psc% "$f=[IO.File]::ReadAllText('!_batp!') -split ':wimmsu\:.*';iex ($f[1]);E '!repo!\!package!' '%%#' '!_cabdir!\mum_x\%%#'"
+if exist "!_cabdir!\mum_x\*.mumx.???" for /f "tokens=* delims=" %%# in ('dir /b /on "!_cabdir!\mum_x\*.mumx.???"') do (
+if %_pwsh% equ 1 %_psc% "$bb = Get-Content '!_cabdir!\mum_x\%%#' -Encoding Byte -Total 216; if ('77 85 77 88' -eq $bb[208..211]) {$bb[215].ToString()} else {'1'}" | findstr 1 %_Nul1% || (set msumumx=1&set loc_mumx=2)
+if %_pwsh% equ 0 if %_wlib% equ 1 !_wimlib! info "!_cabdir!\mum_x\%%#" --header | findstr /i WIM_HDR_FLAG_COMPRESSION %_Nul1% || (set msumumx=1&set loc_mumx=2)
+)
+if exist "!_cabdir!\mum_x\*.mumx" for /f "tokens=* delims=" %%# in ('dir /b /on "!_cabdir!\mum_x\*.mumx"') do (
+if %_pwsh% equ 1 %_psc% "$bb = Get-Content '!_cabdir!\mum_x\%%#' -Encoding Byte -Total 8; $bb[7].ToString()" | findstr 1 %_Nul1% || (set msumumx=1&set loc_mumx=2)
+)
+if %_embd% equ 0 echo %package% [MumX v%loc_mumx%]
+goto :eof
+
 :igonline
 if %online%==0 goto :igoffline
 call :doupdate
@@ -795,7 +835,7 @@ if %_offdu%==1 if not exist "!_cabdir!\du\" (
   for %%i in (!isoupdate!) do expand.exe -r -f:* "!repo!\%%~i" "!_cabdir!\du" %_Nul1%
   if %_build% geq 26100 if exist "!mountdir!\Windows\System32\ServicingCommon.dll" if not exist "!_cabdir!\du\ServicingCommon.dll" copy /y "!mountdir!\Windows\System32\ServicingCommon.dll" "!_cabdir!\du\" %_Nul3%
   if %_build% geq 26100 if exist "!mountdir!\Windows\System32\migwiz\unbcl.dll" if not exist "!_cabdir!\du\unbcl.dll" copy /y "!mountdir!\Windows\System32\migwiz\unbcl.dll" "!_cabdir!\du\" %_Nul3%
-  if exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*.mum" (
+  if exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*" (
   if exist "!mountdir!\sources\setup.exe" if exist "!_cabdir!\du\setup.exe" del /f /q "!_cabdir!\du\setup.exe" %_Nul3%
   if %_build% geq 26052 if exist "!mountdir!\sources\setuphost.exe" if exist "!_cabdir!\du\setuphost.exe" del /f /q "!_cabdir!\du\setuphost.exe" %_Nul3%
   )
@@ -804,7 +844,7 @@ if %_offdu%==1 if not exist "!_cabdir!\du\" (
   for /f %%# in ('dir /b /ad "!_cabdir!\du\*-*" %_Nul6%') do if exist "!cmd_source!\%%#\*.mui" copy /y "!_cabdir!\du\%%#\*" "!cmd_source!\%%#\" %_Nul3%
   if exist "!_cabdir!\du\replacementmanifests\" xcopy /CERY "!_cabdir!\du\replacementmanifests" "!cmd_source!\replacementmanifests\" %_Nul3%
 )
-if exist "!mountdir!\sources\setup.exe" if not exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*.mum" (
+if exist "!mountdir!\sources\setup.exe" if not exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*" (
   if not exist "!_cabdir!\du\" (
   mkdir "!_cabdir!\du" %_Nul3%
   for %%i in (!isoupdate!) do expand.exe -r -f:* "!repo!\%%~i" "!_cabdir!\du" %_Nul1%
@@ -2031,7 +2071,7 @@ goto :eof
 )
 if exist "%dest%\update.mum" findstr /i /m "Package_for_SafeOSDU" "%dest%\update.mum" %_Nul3% && (
 if %_build% geq 26052 if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-Rejuv-Package~*.mum" (set /a _sum-=1&goto :eof)
-if %_build% lss 26052 if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-Rejuv-Package~*.mum" if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-SRT-Package~*.mum" if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-Setup-Package~*.mum" (set /a _sum-=1&goto :eof)
+if %_build% lss 26052 if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-Rejuv-Package~*.mum" if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-SRT-Package~*.mum" if not exist "!mumtarget!\Windows\Servicing\Packages\WinPE-Setup-Package~*" (set /a _sum-=1&goto :eof)
 if %verb%==1 (set /a _sum-=1&goto :eof)
 set "safeos=!safeos! /PackagePath:%dest%\update.mum"
 goto :eof
@@ -2892,12 +2932,12 @@ for /f "tokens=5 delims=.( " %%# in ('%_psc% "(gi '!mountdir!\Windows\system32\n
 goto :eof
 
 :boots
-if exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*.mum" xcopy /CRUY "!mountdir!\sources" "!target!\sources\" %_Nul3%
+if exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*" xcopy /CRUY "!mountdir!\sources" "!target!\sources\" %_Nul3%
 del /f /q "!target!\sources\background.bmp" %_Nul3%
 del /f /q "!target!\sources\xmllite.dll" %_Nul3%
 call :doBootFiles "!target!"
 if exist "!target!\setup.exe" copy /y "!mountdir!\setup.exe" "!target!\" %_Nul3%
-if defined isoupdate if not exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*.mum" (
+if defined isoupdate if not exist "!mountdir!\Windows\Servicing\Packages\WinPE-Setup-Package~*" (
   set uupboot=1
   mkdir "!_cabdir!\du" %_Nul3%
   for %%i in (!isoupdate!) do expand.exe -r -f:* "!repo!\%%~i" "!_cabdir!\du" %_Nul1%
@@ -3227,7 +3267,7 @@ set btx=%arch%
 if /i %arch%==x64 set btx=amd64
 if %wim%==1 set "_file=!target!"
 if %dvd%==1 set "_file=!target!\sources\boot.wim"
-set "_MSUdll=dpx.dll ReserveManager.dll TurboStack.dll UpdateAgent.dll UpdateCompression.dll wcp.dll"
+set "_MSUdll=dpx.dll ReserveManager.dll TurboContainer.dll TurboStack.dll UpdateAgent.dll UpdateCompression.dll wcp.dll"
 set "_MSUonf=onepackage.AggregatedMetadata.cab"
 set IncludeSSU=1
 set /a _rnd=%random%
@@ -3472,6 +3512,7 @@ exit /b
 (echo .Set SourceDir="%1"
 echo "dpx.dll"
 echo "ReserveManager.dll"
+echo "TurboContainer.dll"
 echo "TurboStack.dll"
 echo "UpdateAgent.dll"
 echo "wcp.dll"
@@ -3793,6 +3834,8 @@ set isolab=!isolab:%%#=%%#!
 )
 set _label=%isover%.%isodate%.%isolab%
 if %_SrvEdt% equ 1 (set _label=%_label%_SERVER) else (set _label=%_label%_CLIENT)
+set "_target_img="
+for %%# in (wim esd swm) do if not defined _target_img if exist "!target!\sources\install.%%#" set "_target_img=!target!\sources\install.%%#"
 if not defined _target_img if exist "!target!\install.wim" set "_target_img=!target!\install.wim"
 if not defined _target_img if exist "!target!\install.esd" set "_target_img=!target!\install.esd"
 if not defined _target_img if exist "!target!\install.swm" set "_target_img=!target!\install.swm"
@@ -3861,18 +3904,18 @@ if not defined archl (
 )
 if not defined archl set "archl=X64"
 
-:: Build determination: prefer XML build or updated isomaj over initial _build
+:: Build determination: prefer the serviced image version, then XML
 set "_chk_b="
-if not "!_xml_build!"=="" set "_chk_b=!_xml_build!"
 if "!_chk_b!"=="" if not "!isomaj!"=="" set "_chk_b=!isomaj!"
 if "!_chk_b!"=="" if not "!isover!"=="" for /f "tokens=1 delims=." %%a in ("!isover!") do set "_chk_b=%%a"
+if "!_chk_b!"=="" if not "!_xml_build!"=="" set "_chk_b=!_xml_build!"
 if "!_chk_b!"=="" set "_chk_b=!_build!"
 
-:: Revision (UBR) determination: prefer XML spbuild, then isomin/isover, fallback to _chk_b
+:: Revision (UBR) determination: prefer the serviced image revision, then XML
 set "_winrev="
-if not "!_xml_spbuild!"=="" set "_winrev=!_xml_spbuild!"
 if "!_winrev!"=="" if not "!isomin!"=="" if not "!isomin!"=="0" set "_winrev=!isomin!"
 if "!_winrev!"=="" if not "!isover!"=="" for /f "tokens=2 delims=." %%a in ("!isover!") do set "_winrev=%%a"
+if "!_winrev!"=="" if not "!_xml_spbuild!"=="" set "_winrev=!_xml_spbuild!"
 if "!_winrev!"=="" set "_winrev=!_chk_b!"
 
 :: Windows Server vs Client determination
@@ -3918,7 +3961,6 @@ if not defined _winh2 set "_winh2=!_chk_b!"
 
 :: Edition determination: check MULTI first, then XML, then fallbacks
 set "_winedt="
-if defined imgcount (if !imgcount! gtr 1 set "_winedt=MULTI")
 if defined _xml_imgcount (if !_xml_imgcount! gtr 1 set "_winedt=MULTI")
 if "!_winedt!"=="" if not "!_xml_winedt!"=="" set "_winedt=!_xml_winedt!"
 if "!_winedt!"=="" if not "!_xml_flags!"=="" set "_winedt=!_xml_flags!"
@@ -3938,11 +3980,13 @@ if "!_winedt!"=="" if defined name1 (
 if "!_winedt!"=="" (if %_is_srv% equ 1 (set "_winedt=Server") else (set "_winedt=CLIENT"))
 
 :: Language determination: prefer XML lang, then sources\lang.ini, then fallbacks
+set "_mui="
+if exist "!target!\sources\lang.ini" call :LANGISO
 set "_winlang="
 if not "!_xml_lang!"=="" set "_winlang=!_xml_lang!"
 if "!_winlang!"=="" if defined _mui set "_winlang=!_mui!"
 if "!_winlang!"=="" if defined langid set "_winlang=!langid!"
-if "!_winlang!"=="" set "_winlang=es-mx"
+if "!_winlang!"=="" set "_winlang=UNKNOWN"
 for %%# in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do set "_winlang=!_winlang:%%#=%%#!"
 
 set "isofile=!_winver!_!_winh2!_!_winedt!_!_winrev!_!_winlang!.iso"
