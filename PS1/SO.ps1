@@ -4,7 +4,7 @@ if ($PSVersionTable.PSVersion.Major -le 5) {
     exit
 }
 
-$BaseDir = $PSScriptRoot
+$BaseDir = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $BaseDir "data.ini"
 $BinDir = Join-Path $BaseDir "bin"
 $AriaPath = Join-Path $BinDir "aria2c.exe"

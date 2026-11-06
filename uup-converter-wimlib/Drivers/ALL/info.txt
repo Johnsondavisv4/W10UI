@@ -1,0 +1,14 @@
+DRIVER INTEGRATION (UUP CONVERTER WIMLIB)
+
+Enable AddDrivers=1 in ConvertConfig.ini.
+Place extracted drivers in these folders:
+
+  ALL   : Windows, Setup (WinPE), and Recovery (WinRE).
+  OS    : Windows only.
+  WinPE : Setup and Recovery only.
+
+Subfolders are scanned automatically. Keep all driver files together
+(.inf, .sys, .cat, etc.). Extract .exe/.msi packages first.
+
+Use drivers compatible with the target Windows version and architecture.
+Not all Windows drivers work in WinPE or WinRE.

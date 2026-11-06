@@ -4,16 +4,8 @@ if ($PSVersionTable.PSVersion.Major -le 5) {
     exit
 }
 
-$BaseDir = $PSScriptRoot
+$BaseDir = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $BaseDir "data.ini"
-$BinDir = Join-Path $BaseDir "bin"
-$AriaPath = Join-Path $BinDir "aria2c.exe"
-
-if (Test-Path (Join-Path $BaseDir "W10UI")) {
-    $DownloadsDir = Join-Path $BaseDir "W10UI"
-} else {
-    $DownloadsDir = $BaseDir
-}
 
 function Get-Data {
     param ([string]$IniPath)
@@ -26,6 +18,7 @@ function Get-Data {
     $version = (Get-Content $IniPath | Where-Object { $_ -match '^Version=' } | Select-Object -First 1) -replace '^Version=', ''
     $arch = (Get-Content $IniPath | Where-Object { $_ -match '^Arch=' } | Select-Object -First 1) -replace '^Arch=', ''
     $rev = (Get-Content $IniPath | Where-Object { $_ -match '^Rev=' } | Select-Object -First 1) -replace '^Rev=', ''
+    $lang = (Get-Content $IniPath | Where-Object { $_ -match '^Lang=' } | Select-Object -First 1) -replace '^Lang=', ''
 
     if (-not $version -or -not $arch) {
         Write-Error "data.ini debe contener Version y Arch."
@@ -42,10 +35,10 @@ function Get-Data {
         exit 1
     }
 
-    return @{ version = $version; arch = $arch; rev = $rev; isLatest = $isLatest }
+    return @{ version = $version; arch = $arch; rev = $rev; lang = $lang; isLatest = $isLatest }
 }
 
-function GetID {
+function Get-BuildInfo {
     param (
         [string]$version,
         [string]$arch,
@@ -71,8 +64,14 @@ function GetID {
             Select-Object -First 1
 
         if ($match) {
-            Write-Host "-> Éxito en la primera búsqueda ($version)." -ForegroundColor Green
-            return $match.uuid
+            return @{
+                MatchFound   = $true
+                SearchMethod = "Primera búsqueda ($version)"
+                Title        = $match.title
+                Build        = $match.build
+                Arch         = $match.arch
+                UUID         = $match.uuid
+            }
         }
     }
     
@@ -109,66 +108,47 @@ function GetID {
                     Select-Object -First 1
                     
                 if ($match) {
-                    Write-Host "-> Éxito en la segunda búsqueda (Update for Windows 11 - $buildBase)." -ForegroundColor Green
-                    return $match.uuid
+                    return @{
+                        MatchFound   = $true
+                        SearchMethod = "Segunda búsqueda (Update for Windows 11 - $buildBase)"
+                        Title        = $match.title
+                        Build        = $match.build
+                        Arch         = $match.arch
+                        UUID         = $match.uuid
+                    }
                 }
             }
         }
     }
 
-    Write-Error "No se encontro UpdateID para Version=$version, Rev=$rev y Arch=$arch en ninguna de las búsquedas."
+    Write-Error "No se encontro información de compilación para Version=$version, Rev=$rev y Arch=$arch en ninguna de las búsquedas."
     exit 1
-}
-
-function Get-Aria {
-    param ([string]$TargetPath)
-
-    $ariaUrl = "https://uupdump.net/misc/aria2c.exe"
-    $ariaDir = Split-Path -Parent $TargetPath
-
-    if (-not (Test-Path $ariaDir)) {
-        New-Item -ItemType Directory -Path $ariaDir | Out-Null
-    }
-
-    Write-Host "Descargando aria2c.exe..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $ariaUrl -OutFile $TargetPath
 }
 
 function Main {
     param (
-        [string]$AriaExe,
-        [string]$IniPath,
-        [string]$TargetDir
+        [string]$IniPath
     )
 
+    Write-Host "Cargando configuración desde data.ini..." -ForegroundColor Cyan
     $data = Get-Data -IniPath $IniPath
-    $id = GetID -version $data.version -arch $data.arch -rev $data.rev -isLatest $data.isLatest
-    $ApiUrl = "https://uupdump.net/get.php?id=$id&pack=0&edition=updateOnly&aria2=2"
+    Write-Host "Buscando en UUP Dump (Version=$($data.version), Arch=$($data.arch), Rev=$($data.rev))..." -ForegroundColor Cyan
 
-    if (-not (Test-Path $AriaExe)) {
-        Get-Aria -TargetPath $AriaExe
-    }
+    $info = Get-BuildInfo -version $data.version -arch $data.arch -rev $data.rev -isLatest $data.isLatest
 
-    Write-Host "Conectando a UUP Dump..." -ForegroundColor Cyan
-    $raw = Invoke-WebRequest -Uri $ApiUrl -UseBasicParsing
+    Write-Host "`n========================================" -ForegroundColor Green
+    Write-Host "RESULTADO DE LA BÚSQUEDA EN UUP DUMP" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "Método de búsqueda: $($info.SearchMethod)" -ForegroundColor Yellow
+    Write-Host "Nombre / Título   : $($info.Title)" -ForegroundColor Cyan
+    Write-Host "Compilación       : $($info.Build)" -ForegroundColor Cyan
+    Write-Host "Arquitectura      : $($info.Arch)" -ForegroundColor Cyan
+    Write-Host "Update ID (UUID)  : $($info.UUID)" -ForegroundColor Cyan
+    Write-Host "========================================`n" -ForegroundColor Green
     
-    if (-not (Test-Path $TargetDir)) {
-        New-Item -ItemType Directory -Path $TargetDir | Out-Null
-    }
-
-    $BinDir = Split-Path -Parent $AriaExe
-    $AriaScriptPath = Join-Path $BinDir "aria2_script.txt"
-    $texto = $raw.Content -replace '(?mi)^\s*checksum=.*$\n?', ''
-    $texto | Set-Content -Path $AriaScriptPath -Encoding UTF8
-
-    Write-Host "Iniciando descarga de actualizaciones con aria2c..." -ForegroundColor Green
-    
-    & $AriaExe --no-conf --allow-overwrite=true --auto-file-renaming=false -x 16 -s 16 -j 16 -d $TargetDir -i $AriaScriptPath
-
-    Write-Host "Descarga completada." -ForegroundColor Cyan
-    if (Test-Path $BinDir) {
-        Remove-Item -Path $BinDir -Recurse -Force
-    }
+    Write-Host "Presione Enter para salir..." -ForegroundColor Yellow
+    Read-Host | Out-Null
 }
 
-Main -AriaExe $AriaPath -IniPath $ConfigPath -TargetDir $DownloadsDir
+Main -IniPath $ConfigPath
+

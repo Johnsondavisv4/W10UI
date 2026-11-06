@@ -497,12 +497,12 @@ if %EditionLTSC% equ 1 if %_build% geq 19041 set /a _sum+=1
 if %EditionLTSC% equ 1 if %_build% geq 25193 set /a _sum+=1
 wimlib-imagex.exe extract "%ISOdir%\sources\boot.wim" 2 sources\setuphost.exe --dest-dir=.\bin\temp --no-acls --no-attributes %_Null%
 7z.exe l .\bin\temp\setuphost.exe >.\bin\temp\version.txt 2>&1
-for /f "tokens=4-7 delims=.() " %%i in ('"findstr /i /b "FileVersion" .\bin\temp\version.txt" %_Nul6%') do (set uupver=%%i.%%j&set uupmaj=%%i&set uupmin=%%j&set branch=%%k&set uupdate=%%l)
+for /f "tokens=4-7 delims=.() " %%i in ('"findstr /i /b "FileVersion" .\bin\temp\version.txt" %_Nul6%') do (set uupver=%%i.%%j&set uupmaj=%%i&set uupmin=%%j&set branch=%%k&set uupdate=%%l&set bkpdate=%%l)
 set revver=%uupver%&set revmaj=%uupmaj%&set revmin=%uupmin%
 set "tok=6,7"&set "toe=5,6,7"
 if /i %arch%==x86 (set _ss=x86) else if /i %arch%==x64 (set _ss=amd64) else (set _ss=arm64)
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\WinSxS\Manifests\%_ss%_microsoft-windows-coreos-revision*.manifest --dest-dir=.\bin\temp --no-acls --no-attributes %_Nul3%
-if exist "bin\temp\*_microsoft-windows-coreos-revision*.manifest" for /f "tokens=%tok% delims=_." %%A in ('dir /b /a:-d /od .\bin\temp\*_microsoft-windows-coreos-revision*.manifest') do set revver=%%A.%%B&set revmaj=%%A&set revmin=%%B
+if exist "bin\temp\*_microsoft-windows-coreos-revision*.manifest" for /f "tokens=%tok% delims=_." %%i in ('dir /b /a:-d /od .\bin\temp\*_microsoft-windows-coreos-revision*.manifest') do (set revver=%%i.%%j&set revmaj=%%i&set revmin=%%j)
 if %_build% geq 15063 (
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\System32\config\SOFTWARE --dest-dir=.\bin\temp --no-acls --no-attributes %_Null%
 set "isokey=Microsoft\Windows NT\CurrentVersion\Update\TargetingInfo\Installed"
@@ -520,6 +520,15 @@ call :setuphostprep
 for /f "tokens=4-7 delims=.() " %%i in ('"findstr /i /b "FileVersion" .\bin\version.txt" %_Nul6%') do (set uupver=%%i.%%j&set uupmaj=%%i&set uupmin=%%j&set branch=%%k&set uupdate=%%l)
 del /f /q .\bin\version.txt %_Nul3%
 set "isotime=!uupdate:~2,2!/!uupdate:~4,2!/20!uupdate:~0,2!,!uupdate:~7,2!:!uupdate:~9,2!:10"
+set _pkgtime=0
+if /i "%branch%"=="WinBuild" set _pkgtime=1
+if /i "%branch%"=="GitEnlistment" set _pkgtime=1
+if /i "%uupdate%"=="winpbld" set _pkgtime=1
+if /i "%uupdate%"=="160101" set _pkgtime=1
+echo %uupdate% | findstr /i "BldB" %_Nul1% && set _pkgtime=1
+if %_pkgtime% equ 1 (
+call :get_lcu_pkg
+)
 if defined revbranch set branch=%revbranch%
 if %revmaj%==18363 (
 if /i "%branch:~0,4%"=="19h1" set branch=19h2%branch:~4%
@@ -562,22 +571,20 @@ if %uupver:~0,5%==26100 set uupver=26300%uupver:~5%
 if %uupmin% lss %revmin% (
 set uupver=%revver%
 set uupmin=%revmin%
-if not exist "%SystemRoot%\temp\" mkdir "%SystemRoot%\temp" %_Nul3%
-wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\Servicing\Packages\Package_for_RollupFix*.mum --dest-dir=.\bin\temp --no-acls --no-attributes %_Nul3%
-for /f %%# in ('dir /b /a:-d /od bin\temp\Package_for_RollupFix*.mum') do copy /y "bin\temp\%%#" %SystemRoot%\temp\update.mum %_Nul1%
-if exist "bin\temp\Package_for_RollupFix*.mum" call :datemum uupdate isotime
-if not exist "bin\temp\Package_for_RollupFix*.mum" set branch=WinBuild
+call :get_lcu_pkg
 )
 if %uupmin% gtr %revmin% (
 if not exist "%SystemRoot%\temp\" mkdir "%SystemRoot%\temp" %_Nul3%
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\servicing\Packages\Package_for_RollupFix*.mum --dest-dir=%SystemRoot%\temp --no-acls --no-attributes %_Nul3%
-if not exist "%SystemRoot%\temp\Package_for_RollupFix*.mum" set branch=WinBuild
+if %_build% geq 26052 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\servicing\MumX\Package_for_RollupFix*.mumx* --dest-dir=%SystemRoot%\temp --no-acls --no-attributes %_Nul3%
+if not exist "%SystemRoot%\temp\Package_for_RollupFix*.mum*" set branch=WinBuild
 )
 set _legacy=
 set _useold=0
 if /i "%branch%"=="WinBuild" set _useold=1
 if /i "%branch%"=="GitEnlistment" set _useold=1
 if /i "%uupdate%"=="winpbld" set _useold=1
+if /i "%uupdate%"=="160101" set _useold=1
 if %_useold% equ 1 (
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\System32\config\SOFTWARE --dest-dir=.\bin\temp --no-acls --no-attributes %_Null%
 for /f "tokens=3 delims==:" %%# in ('"offlinereg.exe .\bin\temp\SOFTWARE "Microsoft\Windows NT\CurrentVersion" getvalue BuildLabEx" %_Nul6%') do if not errorlevel 1 (for /f "tokens=1-5 delims=." %%i in ('echo %%~#') do set _legacy=%%i.%%j.%%m.%%l&set branch=%%l)
@@ -614,12 +621,27 @@ call :SET_DYNAMIC_DVDISO
 if exist "!_UUP!\ei.cfg" (copy /y "!_UUP!\ei.cfg" ISOFOLDER\sources\ei.cfg %_Nul3%) else if exist "ei.cfg" (copy /y "ei.cfg" ISOFOLDER\sources\ei.cfg %_Nul3%)
 exit /b
 
+:get_lcu_pkg
+if not exist "%SystemRoot%\temp\" mkdir "%SystemRoot%\temp" %_Nul3%
+for /f %%# in ('wimlib-imagex.exe dir "%ISOdir%\sources\%WimFile%" 1 --path=Windows\Servicing ^| findstr /i "Package_for_RollupFix.*.mum"') do (
+wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 %%# --dest-dir=.\bin\temp --no-acls --no-attributes %_Nul3%
+)
+if not exist "bin\temp\Package_for_RollupFix*.mum*" (
+call set uupdate=%bkpdate%
+set "isotime=!uupdate:~2,2!/!uupdate:~4,2!/20!uupdate:~0,2!,!uupdate:~7,2!:!uupdate:~9,2!:10"
+exit /b
+)
+if exist "bin\temp\Package_for_RollupFix*.mum" for /f %%# in ('dir /b /a:-d /od bin\temp\Package_for_RollupFix*.mum') do copy /y "bin\temp\%%#" %SystemRoot%\temp\update.mum %_Nul1%
+if exist "bin\temp\Package_for_RollupFix*.mumx*" for /f %%# in ('dir /b /a:-d /os bin\temp\Package_for_RollupFix*.mumx*') do copy /y "bin\temp\%%#" %SystemRoot%\temp\update.mum %_Nul1%
+call :datemum uupdate isotime
+exit /b
+
 :datemum
 set "mumfile=%SystemRoot%\temp\update.mum"
 set "chkfile=!mumfile:\=\\!"
 if %_cwmi% equ 1 for /f "tokens=2 delims==" %%# in ('wmic datafile where "name='!chkfile!'" get LastModified /value') do set "mumdate=%%#"
 if %_cwmi% equ 0 for /f %%# in ('%_psc% "([WMI]'CIM_DataFile.Name=''!chkfile!''').LastModified"') do set "mumdate=%%#"
-del /f /q %SystemRoot%\temp\*.mum
+del /f /q %SystemRoot%\temp\*.mum*
 set "%1=!mumdate:~2,2!!mumdate:~4,2!!mumdate:~6,2!-!mumdate:~8,4!"
 set "%2=!mumdate:~4,2!/!mumdate:~6,2!/!mumdate:~0,4!,!mumdate:~8,2!:!mumdate:~10,2!:!mumdate:~12,2!"
 exit /b
@@ -630,9 +652,9 @@ wimlib-imagex.exe extract "%ISOdir%\sources\boot.wim" 2 sources\setupprep.exe --
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\system32\UpdateAgent.dll --dest-dir=%SystemRoot%\temp --no-acls --no-attributes %_Null%
 wimlib-imagex.exe extract "%ISOdir%\sources\%WimFile%" 1 Windows\system32\Facilitator.dll --dest-dir=%SystemRoot%\temp --no-acls --no-attributes %_Null%
 set _svr1=0&set _svr2=0&set _svr3=0&set _svr4=0
-set "_fvr1=%SystemRoot%\temp\UpdateAgent.dll"
+set "_fvr1=%SystemRoot%\temp\setuphost.exe"
 set "_fvr2=%SystemRoot%\temp\setupprep.exe"
-set "_fvr3=%SystemRoot%\temp\setuphost.exe"
+set "_fvr3=%SystemRoot%\temp\UpdateAgent.dll"
 set "_fvr4=%SystemRoot%\temp\Facilitator.dll"
 set "cfvr1=!_fvr1:\=\\!"
 set "cfvr2=!_fvr2:\=\\!"

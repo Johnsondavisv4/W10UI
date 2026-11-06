@@ -3,11 +3,13 @@
 
 # 2. Permitir .gitignore y archivos de la raíz
 !.gitignore
-!Check.ps1
-!SO.ps1
-!Updates.ps1
+!/PS1/
+!/PS1/Check.ps1
+!/PS1/SO.ps1
+!/PS1/Updates.ps1
 !data.ini
 !.gitattributes
+!/Readme.md
 
 # 3. C++
 !/C++/
@@ -34,5 +36,11 @@
 !/uup-converter-wimlib/To_IoT_LTSC.cmd
 !/uup-converter-wimlib/create_virtual_editions.cmd
 !/uup-converter-wimlib/ConvertConfig.ini
+!/uup-converter-wimlib/Drivers/
+!/uup-converter-wimlib/Drivers/ALL/
+!/uup-converter-wimlib/Drivers/ALL/info.txt
 !/uup-converter-wimlib/bin/
 !/uup-converter-wimlib/bin/*
+
+# Archivos de registro temporales generados por UUP Converter
+/uup-converter-wimlib/bin/dism*.reg
