@@ -29,6 +29,8 @@
 !/W10UI/Drivers/ALL/info.txt
 !/W10UI/bin/
 !/W10UI/bin/*
+!/W10UI/bin/bin64/
+!/W10UI/bin/bin64/*
 
 # 5. uup-converter-wimlib y sus binarios específicos
 !/uup-converter-wimlib/
@@ -41,6 +43,8 @@
 !/uup-converter-wimlib/Drivers/ALL/info.txt
 !/uup-converter-wimlib/bin/
 !/uup-converter-wimlib/bin/*
+!/uup-converter-wimlib/bin/bin64/
+!/uup-converter-wimlib/bin/bin64/*
 
 # Archivos de registro temporales generados por UUP Converter
 /uup-converter-wimlib/bin/dism*.reg
